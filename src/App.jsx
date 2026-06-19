@@ -89,7 +89,6 @@ async function fetchShopifyOrders(productId) {
     console.error("Shopify fetch error:", e);
     return [];
   }
-  }
 }
 
 // Convertit une commande Shopify en objet équipe pour la plateforme
