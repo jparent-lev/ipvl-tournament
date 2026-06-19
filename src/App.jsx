@@ -809,7 +809,11 @@ export default function App() {
       )}
 
       <div style={{ marginTop: 40, paddingTop: 16, borderTop: `0.5px solid rgba(245,200,66,0.1)`, fontSize: 11, color: "rgba(255,255,255,0.25)", textAlign: "center" }}>
-        IPVL 2026 — Plateforme de gestion de tournoi v1.6
+        IPVL 2026 — Plateforme de gestion de tournoi v1.8
+        {" · "}
+        <a href="/capitaine" target="_blank" style={{ color: GOLD, fontSize: 11, textDecoration: "none" }}>
+          Espace capitaine ↗
+        </a>
         {" · "}
         <button onClick={() => {
           if (window.confirm("Réinitialiser toutes les données du tournoi ?")) {
