@@ -534,22 +534,54 @@ function generateBracketMatches(pools, teams, poolMatches) {
   return matches;
 }
 
+const STORAGE_KEY = "ipvl2026_state";
+const STORAGE_META = "ipvl2026_meta";
+
+function loadFromStorage() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch { return null; }
+}
+
+function loadMetaFromStorage() {
+  try {
+    const saved = localStorage.getItem(STORAGE_META);
+    return saved ? JSON.parse(saved) : null;
+  } catch { return null; }
+}
+
+function saveToStorage(state, meta) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (meta) localStorage.setItem(STORAGE_META, JSON.stringify(meta));
+  } catch { }
+}
+
 export default function App() {
   const [activeClass, setActiveClass] = useState("corporate");
   const [view, setView] = useState("admin");
   const [tab, setTab] = useState("teams");
   const [syncLoading, setSyncLoading] = useState({ corporate: false, general: false });
-  const [lastSync, setLastSync] = useState({ corporate: null, general: null });
-  const [inventory, setInventory] = useState({ corporate: 16, general: 95 });
 
-  const [state, setState] = useState({
+  const savedMeta = loadMetaFromStorage();
+  const [lastSync, setLastSync] = useState(savedMeta?.lastSync || { corporate: null, general: null });
+  const [inventory, setInventory] = useState(savedMeta?.inventory || { corporate: 16, general: 95 });
+
+  const defaultState = {
     corporate: { teams: [], pools: [], matches: [], bracketMatches: [], phase: "setup" },
     general:   { teams: [], pools: [], matches: [], bracketMatches: [], phase: "setup" },
-  });
+  };
+  const [state, setState] = useState(() => loadFromStorage() || defaultState);
 
   const cls = state[activeClass];
   const tournamentClass = CLASSES[activeClass];
   const update = useCallback(fn => setState(prev => ({ ...prev, [activeClass]: fn(prev[activeClass]) })), [activeClass]);
+
+  // Sauvegarde automatique dans localStorage à chaque changement
+  useEffect(() => {
+    saveToStorage(state, { lastSync, inventory });
+  }, [state, lastSync, inventory]);
 
   const syncShopify = useCallback(async (classId) => {
     setSyncLoading(prev => ({ ...prev, [classId]: true }));
@@ -778,7 +810,17 @@ export default function App() {
       )}
 
       <div style={{ marginTop: 40, paddingTop: 16, borderTop: `0.5px solid rgba(245,200,66,0.1)`, fontSize: 11, color: "rgba(255,255,255,0.25)", textAlign: "center" }}>
-        IPVL 2026 — Plateforme de gestion de tournoi v1.2
+        IPVL 2026 — Plateforme de gestion de tournoi v1.6
+        {" · "}
+        <button onClick={() => {
+          if (window.confirm("Réinitialiser toutes les données du tournoi ?")) {
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(STORAGE_META);
+            window.location.reload();
+          }
+        }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>
+          Réinitialiser
+        </button>
       </div>
     </div>
   );
