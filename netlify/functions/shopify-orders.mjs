@@ -24,25 +24,31 @@ export default async (req) => {
   // Dernière mise à jour : 2026-06-18T23:55:54Z
   const TEAMS_DATA = {
     // Classe Générale — Variant 51321965510962
-    "10214320767282": [
-      {
-        id: "gid://shopify/Order/8830845157682",
-        shopifyOrderName: "#5183",
-        name: "Les excentriques",
-        company: "",
-        captain: "Laurence Paradis",
-        email: "Laurence.paradis@outlook.com",
-        players: ["Laurence Paradis", "Denis Boutin", "Julien Second"],
-        fromShopify: true,
-      }
-    ],
+    "10214320767282": {
+      inventory: 95,
+      teams: [
+        {
+          id: "gid://shopify/Order/8830845157682",
+          shopifyOrderName: "#5183",
+          name: "Les excentriques",
+          company: "",
+          captain: "Laurence Paradis",
+          email: "Laurence.paradis@outlook.com",
+          players: ["Laurence Paradis", "Denis Boutin", "Julien Second"],
+          fromShopify: true,
+        }
+      ]
+    },
     // Classe Corporative — Variant 51321615221042
-    "10214238290226": []
+    "10214238290226": {
+      inventory: 16,
+      teams: []
+    }
   };
 
-  const teams = TEAMS_DATA[numericProductId] || [];
+  const classData = TEAMS_DATA[numericProductId] || { inventory: null, teams: [] };
 
-  return new Response(JSON.stringify({ teams, total: teams.length }), {
+  return new Response(JSON.stringify({ teams: classData.teams, total: classData.teams.length, inventory: classData.inventory }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });

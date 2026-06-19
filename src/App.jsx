@@ -82,10 +82,13 @@ async function fetchShopifyOrders(productId) {
       return [];
     }
     const data = await response.json();
-    return Array.isArray(data.teams) ? data.teams : [];
+    const teams = Array.isArray(data.teams) ? data.teams : [];
+    if (data.inventory !== undefined) teams._inventory = data.inventory;
+    return teams;
   } catch (e) {
     console.error("Shopify fetch error:", e);
     return [];
+  }
   }
 }
 
@@ -537,7 +540,7 @@ export default function App() {
   const [tab, setTab] = useState("teams");
   const [syncLoading, setSyncLoading] = useState({ corporate: false, general: false });
   const [lastSync, setLastSync] = useState({ corporate: null, general: null });
-  const [inventory, setInventory] = useState({ corporate: 16, general: 96 });
+  const [inventory, setInventory] = useState({ corporate: 16, general: 95 });
 
   const [state, setState] = useState({
     corporate: { teams: [], pools: [], matches: [], bracketMatches: [], phase: "setup" },
@@ -552,6 +555,10 @@ export default function App() {
     setSyncLoading(prev => ({ ...prev, [classId]: true }));
     try {
       const shopifyTeams = await fetchShopifyOrders(SHOPIFY_PRODUCTS[classId].productId);
+      // Mettre à jour l'inventaire si retourné par l'API
+      if (shopifyTeams._inventory !== undefined) {
+        setInventory(prev => ({ ...prev, [classId]: shopifyTeams._inventory }));
+      }
 
       setState(prev => {
         const existing = prev[classId].teams.filter(t => !t.fromShopify);
