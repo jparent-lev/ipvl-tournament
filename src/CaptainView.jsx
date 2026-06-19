@@ -1,21 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { loadState, saveState } from "./store.js";
 
 const GOLD = "#F5C842";
 const BLACK = "#0D0D0D";
 const BLACK_SOFT = "#1A1A1A";
 const BLACK_MED = "#2A2A2A";
 const BLACK_CARD = "#222222";
-const STORAGE_KEY = "ipvl2026_state";
-
-function loadState() {
-  try {
-    const s = localStorage.getItem(STORAGE_KEY);
-    return s ? JSON.parse(s) : null;
-  } catch { return null; }
-}
-function saveState(state) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
-}
 
 // ─── Utilitaires ────────────────────────────────────────────────────────────
 
@@ -239,26 +229,37 @@ function MatchCard({ match, teamId, classId, state, onSaveScore, onDeclareWinner
 // ─── Vue principale capitaine ────────────────────────────────────────────────
 
 export default function CaptainView() {
-  const [state, setStateLocal] = useState(() => loadState());
+  const [state, setStateLocal] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedTeam,  setSelectedTeam]  = useState(null);
   const [searchQuery,   setSearchQuery]   = useState("");
   const [confirmed,     setConfirmed]     = useState(false);
 
-  // Polling toutes les 15s pour voir les nouvelles données de l'admin
+  // Chargement initial
+  useEffect(() => {
+    loadState().then(saved => {
+      if (saved?.tournament) setStateLocal(saved.tournament);
+      setLoading(false);
+    });
+  }, []);
+
+  // Polling toutes les 10s
   useEffect(() => {
     const interval = setInterval(() => {
-      const fresh = loadState();
-      if (fresh) setStateLocal(fresh);
-    }, 15000);
+      loadState().then(saved => {
+        if (saved?.tournament) setStateLocal(saved.tournament);
+      });
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // Aussi recharger quand la fenêtre reprend le focus
+  // Recharger au focus
   useEffect(() => {
     const onFocus = () => {
-      const fresh = loadState();
-      if (fresh) setStateLocal(fresh);
+      loadState().then(saved => {
+        if (saved?.tournament) setStateLocal(saved.tournament);
+      });
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
@@ -270,16 +271,23 @@ export default function CaptainView() {
     (t.captain || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  function saveScore(match, scoreMe, scoreThem, myTeamId) {
-    const fresh = loadState();
-    if (!fresh) return;
+  if (loading) return (
+    <div style={{ minHeight: "100vh", background: BLACK, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
+      <div style={{ width: 44, height: 44, background: GOLD, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: 22, fontWeight: 700, color: BLACK }}>V</span>
+      </div>
+      <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14 }}>Chargement…</p>
+    </div>
+  );
 
+  async function saveScore(match, scoreMe, scoreThem, myTeamId) {
+    const saved = await loadState();
+    if (!saved?.tournament) return;
+    const fresh = saved.tournament;
     const classId = selectedClass;
     const isMyTeamA = match.teamA === myTeamId;
     const scoreA = isMyTeamA ? scoreMe : scoreThem;
     const scoreB = isMyTeamA ? scoreThem : scoreMe;
-
-    // Déterminer si c'est un match de poule ou de bracket
     const isPool = !!match.poolId;
 
     if (isPool) {
@@ -287,22 +295,21 @@ export default function CaptainView() {
         m.id === match.id ? { ...m, scoreA, scoreB, played: true } : m
       );
     } else {
-      // Match éliminatoire + propagation du vainqueur
       fresh[classId].bracketMatches = propagateBracket(
         fresh[classId].bracketMatches, match.id, scoreA, scoreB
       );
     }
 
-    saveState(fresh);
+    await saveState({ ...saved, tournament: fresh });
     setStateLocal({ ...fresh });
   }
 
-  function declareWinner(match, winnerId, myTeamId) {
-    const fresh = loadState();
-    if (!fresh) return;
+  async function declareWinner(match, winnerId, myTeamId) {
+    const saved = await loadState();
+    if (!saved?.tournament) return;
+    const fresh = saved.tournament;
     const classId = selectedClass;
     const isPool = !!match.poolId;
-    const loserId = match.teamA === winnerId ? match.teamB : match.teamA;
     const scoreA = match.teamA === winnerId ? 1 : 0;
     const scoreB = match.teamB === winnerId ? 1 : 0;
 
@@ -316,7 +323,7 @@ export default function CaptainView() {
       );
     }
 
-    saveState(fresh);
+    await saveState({ ...saved, tournament: fresh });
     setStateLocal({ ...fresh });
   }
 

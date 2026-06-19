@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { loadState, saveState } from "./store.js";
 
 const GOLD = "#F5C842";
 const GOLD_DARK = "#C9A020";
@@ -533,70 +534,80 @@ function generateBracketMatches(pools, teams, poolMatches) {
   return matches;
 }
 
-const STORAGE_KEY = "ipvl2026_state";
-const STORAGE_META = "ipvl2026_meta";
-
-function loadFromStorage() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : null;
-  } catch { return null; }
-}
-
-function loadMetaFromStorage() {
-  try {
-    const saved = localStorage.getItem(STORAGE_META);
-    return saved ? JSON.parse(saved) : null;
-  } catch { return null; }
-}
-
-function saveToStorage(state, meta) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    if (meta) localStorage.setItem(STORAGE_META, JSON.stringify(meta));
-  } catch { }
-}
+const DEFAULT_STATE = {
+  corporate: { teams: [], pools: [], matches: [], bracketMatches: [], phase: "setup" },
+  general:   { teams: [], pools: [], matches: [], bracketMatches: [], phase: "setup" },
+};
 
 export default function App() {
   const [activeClass, setActiveClass] = useState("corporate");
   const [view, setView] = useState("admin");
   const [tab, setTab] = useState("teams");
   const [syncLoading, setSyncLoading] = useState({ corporate: false, general: false });
+  const [appLoading, setAppLoading] = useState(true);
+  const [lastSync, setLastSync] = useState({ corporate: null, general: null });
+  const [inventory, setInventory] = useState({ corporate: 16, general: 90 });
+  const [state, setState] = useState(DEFAULT_STATE);
+  const saveTimeout = useRef(null);
 
-  const savedMeta = loadMetaFromStorage();
-  const [lastSync, setLastSync] = useState(savedMeta?.lastSync || { corporate: null, general: null });
-  const [inventory, setInventory] = useState(savedMeta?.inventory || { corporate: 16, general: 95 });
+  // Chargement initial depuis GitHub
+  useEffect(() => {
+    loadState().then(saved => {
+      if (saved?.tournament) setState(saved.tournament);
+      if (saved?.meta?.lastSync)  setLastSync(saved.meta.lastSync);
+      if (saved?.meta?.inventory) setInventory(saved.meta.inventory);
+      setAppLoading(false);
+    });
+  }, []);
 
-  const defaultState = {
-    corporate: { teams: [], pools: [], matches: [], bracketMatches: [], phase: "setup" },
-    general:   { teams: [], pools: [], matches: [], bracketMatches: [], phase: "setup" },
-  };
-  const [state, setState] = useState(() => loadFromStorage() || defaultState);
+  // Polling toutes les 20s pour voir les scores des capitaines
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadState().then(saved => {
+        if (saved?.tournament) setState(saved.tournament);
+      });
+    }, 20000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Sauvegarde debounced vers GitHub à chaque changement d'état
+  const persistState = useCallback((newState, meta) => {
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    saveTimeout.current = setTimeout(() => {
+      saveState({ tournament: newState, meta });
+    }, 800);
+  }, []);
 
   const cls = state[activeClass];
   const tournamentClass = CLASSES[activeClass];
-  const update = useCallback(fn => setState(prev => ({ ...prev, [activeClass]: fn(prev[activeClass]) })), [activeClass]);
 
-  // Sauvegarde automatique dans localStorage à chaque changement
-  useEffect(() => {
-    saveToStorage(state, { lastSync, inventory });
-  }, [state, lastSync, inventory]);
+  const update = useCallback(fn => {
+    setState(prev => {
+      const next = { ...prev, [activeClass]: fn(prev[activeClass]) };
+      persistState(next, { lastSync, inventory });
+      return next;
+    });
+  }, [activeClass, lastSync, inventory, persistState]);
 
   const syncShopify = useCallback(async (classId) => {
     setSyncLoading(prev => ({ ...prev, [classId]: true }));
     try {
       const shopifyTeams = await fetchShopifyOrders(SHOPIFY_PRODUCTS[classId].productId);
-      // Mettre à jour l'inventaire si retourné par l'API
       if (shopifyTeams._inventory !== undefined) {
-        setInventory(prev => ({ ...prev, [classId]: shopifyTeams._inventory }));
+        setInventory(prev => {
+          const next = { ...prev, [classId]: shopifyTeams._inventory };
+          return next;
+        });
       }
 
       setState(prev => {
         const existing = prev[classId].teams.filter(t => !t.fromShopify);
-        // Déduplique par shopifyOrderName
         const existingIds = new Set(existing.map(t => t.shopifyOrderName).filter(Boolean));
         const newTeams = shopifyTeams.filter(t => !existingIds.has(t.shopifyOrderName));
-        return { ...prev, [classId]: { ...prev[classId], teams: [...existing, ...newTeams] } };
+        const next = { ...prev, [classId]: { ...prev[classId], teams: [...existing, ...newTeams] } };
+        const newInventory = { ...inventory, ...(shopifyTeams._inventory !== undefined ? { [classId]: shopifyTeams._inventory } : {}) };
+        saveState({ tournament: next, meta: { lastSync, inventory: newInventory } });
+        return next;
       });
 
       const now = new Date().toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" });
@@ -605,7 +616,7 @@ export default function App() {
       console.error("Sync error:", e);
     }
     setSyncLoading(prev => ({ ...prev, [classId]: false }));
-  }, []);
+  }, [inventory, lastSync]);
 
   const addTeam = team => update(s => ({ ...s, teams: [...s.teams, { ...team, id: generateId(), fromShopify: false }] }));
   const removeTeam = id => update(s => ({ ...s, teams: s.teams.filter(t => t.id !== id) }));
@@ -655,6 +666,16 @@ export default function App() {
     borderBottom: active ? `0.5px solid ${BLACK_MED}` : `0.5px solid rgba(245,200,66,0.15)`,
     marginBottom: active ? -1 : 0, position: "relative", zIndex: active ? 1 : 0,
   });
+
+  // Écran de chargement
+  if (appLoading) return (
+    <div style={{ minHeight: "100vh", background: BLACK, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
+      <div style={{ width: 48, height: 48, background: GOLD, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: 24, fontWeight: 700, color: BLACK }}>V</span>
+      </div>
+      <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14 }}>Chargement du tournoi…</p>
+    </div>
+  );
 
   if (view === "display") return (
     <div style={{ background: BLACK, minHeight: "100vh" }}>
@@ -809,16 +830,15 @@ export default function App() {
       )}
 
       <div style={{ marginTop: 40, paddingTop: 16, borderTop: `0.5px solid rgba(245,200,66,0.1)`, fontSize: 11, color: "rgba(255,255,255,0.25)", textAlign: "center" }}>
-        IPVL 2026 — Plateforme de gestion de tournoi v1.8
+        IPVL 2026 — Plateforme de gestion de tournoi v1.9
         {" · "}
         <a href="/capitaine" target="_blank" style={{ color: GOLD, fontSize: 11, textDecoration: "none" }}>
           Espace capitaine ↗
         </a>
         {" · "}
-        <button onClick={() => {
+        <button onClick={async () => {
           if (window.confirm("Réinitialiser toutes les données du tournoi ?")) {
-            localStorage.removeItem(STORAGE_KEY);
-            localStorage.removeItem(STORAGE_META);
+            await saveState({ tournament: DEFAULT_STATE, meta: { lastSync: { corporate: null, general: null }, inventory: { corporate: 16, general: 90 } } });
             window.location.reload();
           }
         }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>
