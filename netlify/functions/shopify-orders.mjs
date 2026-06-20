@@ -21,12 +21,42 @@ export default async (req) => {
   const numericProductId = productId?.toString().split("/").pop();
 
   // Données IPVL extraites directement depuis Shopify par Claude
-  // Dernière mise à jour : 2026-06-19T02:30:00Z
+  // Dernière mise à jour : 2026-06-20T15:10:00Z
   const TEAMS_DATA = {
     // Classe Générale — Variant 51321965510962
     "10214320767282": {
-      inventory: 90,
+      inventory: 87,
       teams: [
+        {
+          id: "gid://shopify/Order/8832809304370",
+          shopifyOrderName: "#5192",
+          name: "Touquaille",
+          company: "",
+          captain: "Marie-Christine LeBel",
+          email: "mchristine123@hotmail.com",
+          players: ["Marie-Christine LeBel", "Hugo Lamarre", "Étienne Lamarre"],
+          fromShopify: true,
+        },
+        {
+          id: "gid://shopify/Order/8832785580338",
+          shopifyOrderName: "#5191",
+          name: "Les Pastagas",
+          company: "",
+          captain: "Philip Bardou",
+          email: "philipbardou@msn.com",
+          players: ["Philip Bardou", "Frédéric Maugourd", "Jérôme Messant"],
+          fromShopify: true,
+        },
+        {
+          id: "gid://shopify/Order/8832399769906",
+          shopifyOrderName: "#5190",
+          name: "Springbrook Boules",
+          company: "",
+          captain: "John Reid",
+          email: "eighthurley@gmail.com",
+          players: ["John Reid", "JoAnn Miller-Reid", "Claire Rancourt"],
+          fromShopify: true,
+        },
         {
           id: "gid://shopify/Order/8832131301682",
           shopifyOrderName: "#5188",
@@ -73,7 +103,7 @@ export default async (req) => {
           name: "Les Pétanque Or",
           company: "",
           captain: "Grégory Avenet",
-          email: "Gravenet@gmail.com",
+          email: "gravenet@gmail.com",
           players: ["Grégory Avenet", "Steve Moreau", "Line Nault"],
           fromShopify: true,
         },
